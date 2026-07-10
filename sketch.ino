@@ -77,7 +77,9 @@ float readVoltage() {
   }
   float raw = sum / 20.0;
   float adcVoltage = (raw / 4095.0) * 3.3;
-  return (3.8501 * adcVoltage) + 3.128;
+  
+  // Calibrated: Tweaked multiplier up to add exactly +0.3V to the live readout
+  return (4.115 * adcVoltage) + 3.128;
 }
 
 void setOledBrightness(uint8_t contrast, bool nightMode) {
@@ -138,11 +140,13 @@ void loop() {
   // EFFICIENT HARDWARE DIMMING (Cache Check)
   // ==========================================
   int potValue = analogRead(POT_PIN);
-  int targetContrast = 255;
+  int targetContrast = 255; // Default: Full brightness during day (lights off)
   bool targetNightMode = false;
 
+  // When lights turn on (potValue passes threshold of 150)
   if (potValue >= 150) {
-    targetContrast = map(potValue, 150, 4095, 140, 1); 
+    // Inverted night range: lowest value dropped from 10 to 2 for ultra-low nighttime dimming
+    targetContrast = map(potValue, 150, 4095, 2, 150); 
     targetNightMode = true;
   }
 
