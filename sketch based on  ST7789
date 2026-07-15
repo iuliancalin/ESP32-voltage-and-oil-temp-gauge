@@ -1,20 +1,28 @@
 #include <SPI.h>
-#include <TFT_eSPI.h> // Hardware SPI library for ST7789
+#include <Adafruit_GFX.h>    // Core graphics library
+#include <Adafruit_ST7789.h> // Hardware-specific library for ST7789
 
 // Include your custom gauge font
-#include "QuartzRegularDB12pt7b.h"   
-
-// Include standard Adafruit GFX fonts
-#include <Fonts/FreeMonoBold9pt7b.h>
-
-// Initialize TFT_eSPI
-TFT_eSPI tft = TFT_eSPI();
+#include "DS_Digital_Bold16pt7b.h"   
+#include "DS_Digital_Bold12pt7b.h" 
+#include "Fonts/FreeSansBold9pt7b.h"
 
 // --- HARDWARE PIN ASSIGNMENTS ---
-#define VOLT_PIN       35  // Battery Voltage tracker
-#define POT_PIN        32  // Instrument cluster dimmer circuit
-#define OIL_TEMP_PIN   34  // NTC temperature sensor signal
-#define TFT_BL_PIN     15  // Backlight PWM Pin (Purple Wire)
+#define TFT_CS         5   // Blue Wire
+#define TFT_RST        4   // Yellow Wire
+#define TFT_DC         2   // Orange Wire
+#define TFT_MOSI      23   // Gray Wire (formerly Brown)
+#define TFT_SCLK      18   // Green Wire
+#define TFT_BL_PIN    15   // Backlight PWM Pin (Purple Wire) - LEAVE AS OUTPUT ONLY
+
+#define VOLT_PIN      35   // Battery Voltage tracker
+#define POT_PIN       32   // Instrument cluster dimmer circuit / Headlight sensor
+#define OIL_TEMP_PIN  34   // NTC temperature sensor signal
+
+// --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
+#define COLOR_DARK_ORANGE  0x99E0 // Dark orange/amber background for the entire top half
+#define COLOR_LIGHT_ORANGE 0xFCE0  // Bright light orange/amber for text
+#define COLOR_LIGHT_GREEN  0x1D80
 
 // --- SENSOR PARAMETERS ---
 const float SERIES_RESISTOR = 10000.0; 
@@ -34,17 +42,15 @@ NTCPoint table[TABLE_SIZE] = {
 bool sensorDisconnected = false;
 int lastPwmDuty = -1; // Cache for dimming PWM updates
 
-// ==========================================
-// 24x24 LOW-BEAM HEADLIGHT ICON BITMAP
-// ==========================================
-const unsigned char epd_bitmap_headlight[] PROGMEM = {
-  0x00, 0x00, 0x00, 0x00, 0x1f, 0x00, 0x03, 0xf0, 0xc0, 0x0e, 0x0c, 0x20, 
-  0x38, 0x03, 0x10, 0x60, 0x00, 0x90, 0xc1, 0x00, 0x48, 0x82, 0x00, 0x48, 
-  0x04, 0x00, 0x24, 0x08, 0x00, 0x24, 0x10, 0x00, 0x24, 0x20, 0x00, 0x24, 
-  0x40, 0x00, 0x24, 0x00, 0x00, 0x48, 0x00, 0x00, 0x48, 0x00, 0x00, 0x90, 
-  0x00, 0x03, 0x10, 0x00, 0x0e, 0x20, 0x00, 0x30, 0xc0, 0x00, 0x1f, 0x00, 
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
+// State variables for flicker-free rendering
+float lastVoltage = -1.0;
+float lastOilTemp = -1.0;
+bool lastHeadlightsState = false;
+bool firstRun = true;
+
+// Initialize SPI & Adafruit Driver
+SPIClass *vspi = new SPIClass(VSPI);
+Adafruit_ST7789 tft = Adafruit_ST7789(vspi, TFT_CS, TFT_DC, TFT_RST);
 
 // ==========================================
 // SENSOR READING FUNCTIONS
@@ -102,34 +108,37 @@ void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
 
-  // Initialize Backlight PWM
+  // Initialize Backlight PWM Pin as safe, pure output
   pinMode(TFT_BL_PIN, OUTPUT);
   analogWrite(TFT_BL_PIN, 255); // Full brightness startup
 
-  // Initialize ST7789 TFT
-  tft.init();
-  tft.setRotation(1);        // Landscape orientation
+  // Start the SPI bus with hardware pins
+  vspi->begin(TFT_SCLK, -1, TFT_MOSI, TFT_CS);
+
+  // Initialize display controller (172 x 320)
+  tft.init(172, 320);
+  tft.setRotation(3);        // Landscape flipped 180 (wires on right side)
   tft.invertDisplay(true);   // Corrects color inversion on ST7789
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(ST77XX_BLACK);
 
   // ==========================================
-  // ANIMATED SPLASH SCREEN
+  // ANIMATED SPLASH SCREEN (Optimized to prevent flickering)
   // ==========================================
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  tft.setTextColor(COLOR_LIGHT_ORANGE, ST77XX_BLACK); // Set solid background color to overwrite old dots
+  tft.setFont(); 
+  tft.setTextSize(4);
+  tft.setCursor(80, 45); 
+  tft.print("BMW E36");
+
+  tft.setTextSize(2);
+  tft.setCursor(80, 95);
+  tft.print("Initializing");
 
   for (int i = 0; i < 12; i++) {
-    tft.fillScreen(TFT_BLACK);
-
-    // BMW E36 Title
-    tft.setFreeFont(&FreeMonoBold9pt7b);
-    tft.drawString("BMW E36", 110, 60);
-
-    // Initializing text
-    tft.setTextFont(1); // Standard font
-    tft.setTextSize(2);
-    tft.setCursor(95, 100);
-    tft.print("Initializing");
-
+    // Overwrite old dots area with a tiny black box instead of clearing the whole screen
+    tft.fillRect(238, 95, 45, 20, ST77XX_BLACK);
+    tft.setCursor(238, 95);
+    
     // Animated dots
     switch (i % 4) {
       case 1: tft.print(".");   break;
@@ -140,24 +149,24 @@ void setup() {
     delay(180);
   }
 
-  tft.fillScreen(TFT_BLACK);
+  tft.fillScreen(ST77XX_BLACK);
 }
 
 // ==========================================
-// MAIN LOOP
+// MAIN LOOP (Flicker-Free, Multi-Update)
 // ==========================================
 void loop() {
   // ==========================================
-  // PWM BACKLIGHT DIMMING (TFT Replacement for OLED Contrast)
+  // PWM BACKLIGHT DIMMING & LIGHT STATE SENSING
   // ==========================================
   int potValue = analogRead(POT_PIN);
   int targetPwm = 255; // Full brightness during day
   bool headlightsOn = false;
 
-  if (potValue >= 150) {
+  if (potValue >= 180) {
     headlightsOn = true;
     // Map cluster dimmer signal to PWM range (255 down to ~15 for night)
-    targetPwm = map(potValue, 150, 4095, 200, 15); 
+    targetPwm = map(potValue, 180, 4095, 10, 100); 
   }
 
   if (targetPwm != lastPwmDuty) {
@@ -177,43 +186,113 @@ void loop() {
   }
 
   // ==========================================
-  // TFT RENDERING (Layout placeholder to align later)
+  // ONE-TIME STATIC DRAW (Top block, lines & labels)
   // ==========================================
-  tft.fillScreen(TFT_BLACK);
-  tft.setTextColor(TFT_WHITE, TFT_BLACK);
+  if (firstRun) {
+    tft.fillScreen(ST77XX_BLACK);
+    
+    // Draw the solid dark orange canvas across the entire top half (Y: 0 to 85)
+    tft.fillRect(0, 0, 320, 85, COLOR_DARK_ORANGE);
+    
+    // Draw a 2-pixel light orange divider line splitting the left and right orange sections
+    tft.fillRect(159, 0, 2, 85, COLOR_LIGHT_ORANGE);
 
-  // VOLTAGE DISPLAY
-  tft.setFreeFont(&QuartzRegularDB12pt7b);
-  tft.setCursor(10, 50);   
-  tft.print(voltage, 1);
-  tft.print("V");
-
-  // TEMPERATURE DISPLAY
-  tft.setCursor(170, 50); 
-  if (sensorDisconnected || oilTemp == 0) {
-    tft.print("---"); 
-  } else {
-    tft.print(oilTemp, 0); 
+    // Static Labels (printed directly on top of the dark orange background)
+    tft.setFont(); // Standard font
+    tft.setTextSize(2);
+    tft.setTextColor(COLOR_LIGHT_ORANGE, COLOR_DARK_ORANGE); 
+    
+    tft.setCursor(25, 62);
+    tft.print("Battery");
+    tft.setCursor(185, 62);
+    tft.print("Oil Temp");
+    
+    firstRun = false;
   }
-  
-  int degreeX = tft.getCursorX() + 2; 
-  tft.fillCircle(degreeX, 35, 2, TFT_WHITE); // Degree symbol circle
-  
-  tft.setCursor(degreeX + 6, 50); 
-  tft.print("C");
 
-  // CENTER VERTICAL SEPARATOR LINE
-  tft.drawFastVLine(160, 10, 152, TFT_WHITE); 
+  // ==========================================
+  // DYNAMIC VOLTAGE UPDATE
+  // ==========================================
+  if (abs(voltage - lastVoltage) >= 0.1) {
+    // Overwrite the old value with dark orange to keep the seamless header look
+    tft.fillRect(5, 5, 150, 48, COLOR_DARK_ORANGE);
 
-  // BOTTOM TEXT LABELS
-  tft.setTextFont(1);
-  tft.setTextSize(2);
-  tft.drawString("Battery", 10, 90);
-  tft.drawString("Oil Temp", 170, 90);
+    tft.setFont(&DS_Digital_Bold16pt7b);
+    tft.setTextColor(COLOR_LIGHT_ORANGE); 
+    tft.setCursor(17, 48);   
+    tft.print(voltage, 2);
+    tft.setFont(&DS_Digital_Bold12pt7b);
+    tft.print("V");
+    
+    lastVoltage = voltage;
+  }
 
-  // HEADLIGHT INDICATOR ICON (Appears when cluster lights are on)
-  if (headlightsOn) {
-    tft.drawBitmap(10, 130, epd_bitmap_headlight, 24, 24, TFT_GREEN);
+  // ==========================================
+  // DYNAMIC TEMPERATURE UPDATE
+  // ==========================================
+  if (oilTemp != lastOilTemp) {
+    // Overwrite the old value with dark orange to keep the seamless header look
+    tft.fillRect(165, 5, 150, 48, COLOR_DARK_ORANGE);
+
+    tft.setFont(&DS_Digital_Bold16pt7b);
+    tft.setTextColor(COLOR_LIGHT_ORANGE); 
+    tft.setCursor(185, 48); 
+    
+    if (sensorDisconnected || oilTemp == 0) {
+      tft.print("---"); 
+    } else {
+      tft.print(oilTemp, 0); 
+    }
+    
+    // Dynamic custom degree symbol drawing
+    int16_t x1, y1;
+    uint16_t w, h;
+    String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
+    tft.getTextBounds(tempVal, 185, 34, &x1, &y1, &w, &h);
+    int degreeX = x1 + w + 4; 
+    
+    tft.fillCircle(degreeX, 16, 2, COLOR_LIGHT_ORANGE);
+    
+    tft.setCursor(degreeX + 8, 42);
+    tft.setFont(&DS_Digital_Bold12pt7b); 
+    tft.print("C");
+    
+    lastOilTemp = oilTemp;
+  }
+
+// ==========================================
+  // DYNAMIC HEADLIGHT ICON UPDATE (Font-based "D" + Vector Low Beams)
+  // ==========================================
+  if (headlightsOn != lastHeadlightsState) {
+    int iconX = 40; 
+    int iconY = 145; 
+    
+    // Determine the color based on headlight state (COLOR_LIGHT_GREEN to show)
+    uint16_t activeColor = headlightsOn ? COLOR_LIGHT_GREEN : ST77XX_BLACK;
+
+    // 1. Draw the Capital "D" using a clean sans-serif font
+    tft.setFont(&FreeSansBold9pt7b); 
+    tft.setTextColor(activeColor);
+    tft.setCursor(iconX - 4, iconY + 12); // Position adjusted for standard font baseline
+    tft.print("D");
+
+    // 2. Draw the 3 downward-sloping beam lines
+    // Top beam
+    tft.drawLine(iconX - 10, iconY - 8, iconX - 22, iconY - 4, activeColor);
+    tft.drawLine(iconX - 11, iconY - 7, iconX - 23, iconY - 3, activeColor); 
+    tft.drawLine(iconX - 12, iconY - 6, iconX - 24, iconY - 2, activeColor);
+
+    // Middle beam
+    tft.drawLine(iconX - 10, iconY - 0, iconX - 23, iconY + 5, activeColor);
+    tft.drawLine(iconX - 11, iconY + 1, iconX - 24, iconY + 6, activeColor); 
+    tft.drawLine(iconX - 12, iconY + 2, iconX - 25, iconY + 7, activeColor);
+
+    // Bottom beam
+    tft.drawLine(iconX - 10, iconY + 9, iconX - 24, iconY + 14, activeColor);
+    tft.drawLine(iconX - 11, iconY + 10, iconX - 25, iconY + 15, activeColor); 
+    tft.drawLine(iconX - 12, iconY + 11, iconX - 26, iconY + 16, activeColor);
+
+    lastHeadlightsState = headlightsOn;
   }
 
   delay(100); 
