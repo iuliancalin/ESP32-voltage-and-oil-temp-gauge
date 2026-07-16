@@ -22,9 +22,9 @@
 #define OIL_TEMP_PIN  34   // NTC temperature sensor signal
 
 // --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
-#define COLOR_DARK_ORANGE  0x1020 // Scaled down exactly 50% dimmer on the same spectrum
-#define COLOR_LIGHT_ORANGE 0xFCE0  // Bright light orange/amber for text
-#define COLOR_LIGHT_ORANGE_SMALL 0xC280  // Bright light orange/amber for text
+#define COLOR_DARK_ORANGE  0x4060 // Scaled down exactly 50% dimmer on the same spectrum
+#define COLOR_LIGHT_ORANGE 0xfca0  // Bright light orange/amber for text
+#define COLOR_LIGHT_ORANGE_SMALL 0xfc80  // Bright light orange/amber for text
 #define COLOR_LIGHT_GREEN  0x1D80
 #define COLOR_LIGHT_BLUE   0x053B // Crisp bright blue for temporary HU check
 
@@ -106,7 +106,7 @@ float readVoltage() {
   float raw = sum / 20.0;
   float adcVoltage = (raw / 4095.0) * 3.3;
   
-  return (4.115 * adcVoltage) + 3.128;
+  return (4.115 * adcVoltage) + 3.000;
 }
 
 // ==========================================
@@ -242,7 +242,7 @@ void loop() {
   // ==========================================
   // DYNAMIC TEMPERATURE UPDATE
   // ==========================================
-  if (oilTemp != lastOilTemp) {
+  if (abs(oilTemp - lastOilTemp) >= 1.0) {
     // Completely clears down to Y: 58 to prevent character stacking artifacts
     tft.fillRect(165, 2, 150, 56, COLOR_DARK_ORANGE);
 
@@ -260,7 +260,7 @@ void loop() {
     int16_t x1, y1;
     uint16_t w, h;
     String tempVal = (sensorDisconnected || oilTemp == 0) ? "---" : String((int)oilTemp);
-    tft.getTextBounds(tempVal, 185, 34, &x1, &y1, &w, &h);
+    tft.getTextBounds(tempVal, 195, 34, &x1, &y1, &w, &h);
     int degreeX = x1 + w + 4; 
     
     int rOuter = 6;
