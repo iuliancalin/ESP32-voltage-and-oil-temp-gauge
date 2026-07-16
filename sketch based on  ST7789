@@ -175,7 +175,7 @@ void loop() {
   if (potValue >= 180) {
     headlightsOn = true;
     // Map cluster dimmer signal to PWM range (255 down to ~15 for night)
-    targetPwm = map(potValue, 180, 4095, 10, 100); 
+    targetPwm = map(potValue, 180, 4095, 10, 150); 
   }
 
   if (targetPwm != lastPwmDuty) {
