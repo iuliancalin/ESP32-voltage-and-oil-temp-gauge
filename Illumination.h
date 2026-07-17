@@ -1,5 +1,5 @@
-#ifndef ILLUMINATION_H
-#define ILLUMINATION_H
+#ifndef LOW_BEAM_ICON_H
+#define LOW_BEAM_ICON_H
 
 #include <Arduino.h>
 #include <Adafruit_ST7789.h>
@@ -7,9 +7,13 @@
 // This tells the compiler your screen object exists in the main file
 extern Adafruit_ST7789 tft; 
 
-// 1. Your raw image array data
-const uint16_t image_data[] PROGMEM = {
-0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
+// Icon Dimensions
+const uint16_t LOW_BEAM_WIDTH = 120;
+const uint16_t LOW_BEAM_HEIGHT = 120;
+
+// 32x32 Low Beam Icon (RGB565 Format: Green on Black Background)
+const uint16_t low_beam_icon[] PROGMEM = {
+  0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
   0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
   0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
   0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000,
@@ -1811,30 +1815,4 @@ const uint16_t image_data[] PROGMEM = {
   0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
 };
 
-const int image_data_width = 120;
-const int image_data_height = 120;
-
-// 2. Your icon drawing function
-void drawLowBeamIcon(int x, int y, bool state) {
-  if (state) {
-    for (int yIdx = 0; yIdx < image_data_height; yIdx++) {
-      for (int xIdx = 0; xIdx < image_data_width; xIdx++) {
-        uint16_t color = pgm_read_word(&image_data[yIdx * image_data_width + xIdx]);
-        if (color != 0x0000) { 
-          tft.drawPixel(x + xIdx, y + yIdx, color);
-        }
-      }
-    } // Ends the xIdx loop
-  } else {
-    for (int yIdx = 0; yIdx < image_data_height; yIdx++) {
-      for (int xIdx = 0; xIdx < image_data_width; xIdx++) {
-        uint16_t color = pgm_read_word(&image_data[yIdx * image_data_width + xIdx]);
-        if (color != 0x0000) { 
-          tft.drawPixel(x + xIdx, y + yIdx, 0x0000);
-        }
-      }
-    }
-  } 
-}
-
-#endif // Make sure this is still at the absolute bottom
+#endif
