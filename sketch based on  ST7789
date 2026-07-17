@@ -24,7 +24,7 @@
 
 // --- COLOR CONFIGURATIONS (BMW OEM Amber/Orange Theme) ---
 #define COLOR_DARK_ORANGE  0x4860 // Scaled down exactly 50% dimmer on the same spectrum
-#define COLOR_LIGHT_ORANGE 0xfce0  // Bright light orange/amber for text
+#define COLOR_LIGHT_ORANGE 0xfd00  // Bright light orange/amber for text
 #define COLOR_LIGHT_ORANGE_SMALL 0xfc80  // Bright light orange/amber for text
 #define COLOR_LIGHT_GREEN  0x1D80
 #define COLOR_LIGHT_BLUE   0x053B // Crisp bright blue for temporary HU check
