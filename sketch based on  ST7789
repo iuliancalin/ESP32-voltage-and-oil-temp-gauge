@@ -61,8 +61,8 @@ const int dividerW = 3;         // Thickness of the divider line in pixels
 const int dividerH = 70;        // Height of the divider line (matches background block)
 
 // --- Headlight Indicator Placement ---
-const int iconX = 0;          // Horizontal offset for the low beam symbol matrix
-const int iconY = 70;           // Vertical coordinate where the 120x120 icon renders
+const int iconX = 0;           // Horizontal offset for the low beam symbol matrix
+const int iconY = 70;          // Vertical coordinate where the 120x120 icon renders
 
 // --- Custom Degree Circle (Symbol Erase Fix Context) ---
 const int degreeBaseY = 16;     // Exact vertical center for the custom ° ring overlay
@@ -152,7 +152,9 @@ void loop() {
 
   // --- DYNAMIC TEMPERATURE UPDATE ---
   if (abs(oilTemp - lastOilTemp) >= 1.0) {
+    // Erase the previous background block to remove ghosting
     tft.fillRect(oilTempUI.boxX, oilTempUI.boxY, oilTempUI.boxW, oilTempUI.boxH, COLOR_DARK_ORANGE);
+    
     tft.setFont(&DS_Digital_Bold16pt7b);
     tft.setTextColor(COLOR_LIGHT_ORANGE); 
     tft.setCursor(oilTempUI.textX, oilTempUI.textY); 
@@ -165,8 +167,8 @@ void loop() {
       degreeX += 90; 
     } else {
       tft.print(oilTemp, 0); 
-      // Keep the original snug fit for 2-digit numbers
-      degreeX += 42; 
+      // Dynamic shift: 2 digits = 42px offset, 3 digits (100°C+) = 60px offset
+      degreeX += (oilTemp >= 100) ? 60 : 42; 
     }
     
     // --- DEGREE SYMBOL DRAWING ---
@@ -177,6 +179,7 @@ void loop() {
     tft.setFont(&FreeSansBold9pt7b); 
     tft.print("C");
     
+    // Update state to lock in refresh guard
     lastOilTemp = oilTemp;
   }
 
